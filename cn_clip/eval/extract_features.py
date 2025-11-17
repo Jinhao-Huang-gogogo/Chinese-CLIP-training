@@ -151,7 +151,7 @@ if __name__ == "__main__":
     assert os.path.exists(args.resume), "The checkpoint file {} not exists!".format(args.resume)
     # Map model to be loaded to specified single gpu.
     loc = "cuda:{}".format(args.gpu)
-    checkpoint = torch.load(args.resume, map_location='cpu')
+    checkpoint = torch.load(args.resume, map_location='cpu',weights_only=False)
     start_epoch = checkpoint["epoch"]
     sd = checkpoint["state_dict"]
     if next(iter(sd.items()))[0].startswith('module'):
@@ -197,7 +197,7 @@ if __name__ == "__main__":
                     images = images.cuda(args.gpu, non_blocking=True)
                     image_features = model(images, None)
                     image_features /= image_features.norm(dim=-1, keepdim=True)
-                    for image_id, image_feature in zip(image_ids.tolist(), image_features.tolist()):
+                    for image_id, image_feature in zip(image_ids.tolist() if isinstance(image_ids, torch.Tensor) else image_ids, image_features.tolist()):
                         fout.write("{}\n".format(json.dumps({"image_id": image_id, "feature": image_feature})))
                         write_cnt += 1
         print('{} image features are stored in {}'.format(write_cnt, args.image_feat_output_path))

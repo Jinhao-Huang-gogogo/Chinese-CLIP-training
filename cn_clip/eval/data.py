@@ -86,7 +86,7 @@ class EvalImgDataset(Dataset):
         img_id = img_id.tobytes()
         image_b64 = image_b64.tobytes()
 
-        img_id = int(img_id.decode(encoding="utf8", errors="ignore"))
+        img_id = img_id.decode(encoding="utf8", errors="ignore")
         image_b64 = image_b64.decode(encoding="utf8", errors="ignore")
         image = Image.open(BytesIO(base64.urlsafe_b64decode(image_b64))) # already resized
         image = self.transform(image)

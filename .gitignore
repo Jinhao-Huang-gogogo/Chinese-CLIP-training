@@ -148,3 +148,9 @@ core.*
 
 # Allow
 !src/evaluation/misc/results_dbs/*
+pretrained_weights/*
+*.pt
+experiments
+datasets
+text2image_search/recognition_from_video/test_data/1414669237-1-192.mp4
+text2image_search/search_results/*

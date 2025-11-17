@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLIP 文搜图系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .search-section {
+            padding: 40px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .search-form {
+            display: flex;
+            gap: 15px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 50px;
+            font-size: 16px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        
+        .search-input:focus {
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+        
+        .search-button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .search-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(52, 152, 219, 0.3);
+        }
+        
+        .search-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .results-section {
+            padding: 30px;
+        }
+        
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .results-count {
+            font-size: 1.2em;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 25px;
+            margin-top: 20px;
+        }
+        
+        .image-card {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .image-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+        }
+        
+        .image-container {
+            width: 100%;
+            height: 250px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f8f9fa;
+        }
+        
+        .image-container img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            transition: transform 0.3s ease;
+        }
+        
+        .image-card:hover .image-container img {
+            transform: scale(1.05);
+        }
+        
+        .image-info {
+            padding: 15px;
+        }
+        
+        .image-id {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            word-break: break-all;
+        }
+        
+        .image-score {
+            color: #27ae60;
+            font-weight: 600;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+        
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #7f8c8d;
+        }
+        
+        .empty-state i {
+            font-size: 4em;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        /* 大图预览样式 */
+        .image-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            animation: fadeIn 0.3s;
+        }
+
+        .modal-content {
+            position: relative;
+            margin: auto;
+            display: block;
+            max-width: 90%;
+            max-height: 90%;
+            top: 50%;
+            transform: translateY(-50%);
+            animation: zoomIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes zoomIn {
+            from { transform: translateY(-50%) scale(0.9); }
+            to { transform: translateY(-50%) scale(1); }
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 35px;
+            color: #f1f1f1;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .close-modal:hover {
+            color: #bbb;
+        }
+
+        .image-details {
+            color: #ccc;
+            padding: 10px 20px;
+            text-align: center;
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            background: rgba(0,0,0,0.7);
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .image-container {
+                height: 200px;
+            }
+            
+            .results-grid {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 15px;
+            }
+            
+            .search-form {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 智能文搜</h1>
+            <!-- <p>使用中文CLIP模型进行文本到图像的智能搜索</p> -->
+        </div>
+        
+        <div class="search-section">
+            <form class="search-form" onsubmit="searchImages(event)">
+                <input type="text" class="search-input" id="searchText" 
+                       placeholder="请输入描述文本，例如：穿白色上衣的人。。" required>
+                <button type="submit" class="search-button" id="searchButton">
+                    搜索图片
+                </button>
+            </form>
+        </div>
+        
+        <div class="results-section">
+            <div class="results-header">
+                <div class="results-count" id="resultsCount">等待搜索...</div>
+            </div>
+            
+            <div id="resultsContainer">
+                <div class="empty-state">
+                    <div>📷</div>
+                    <h3>输入文本描述开始搜索</h3>
+                    <p>系统将根据您的文字描述找到最相关的图片</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 大图预览模态框 -->
+    <div id="imageModal" class="image-modal">
+        <span class="close-modal" onclick="closeModal()">&times;</span>
+        <img class="modal-content" id="modalImage">
+        <div class="image-details" id="modalDetails"></div>
+    </div>
+
+    <script>
+        async function searchImages(event) {
+            event.preventDefault();
+            
+            const searchText = document.getElementById('searchText').value;
+            const searchButton = document.getElementById('searchButton');
+            const resultsContainer = document.getElementById('resultsContainer');
+            const resultsCount = document.getElementById('resultsCount');
+            
+            if (!searchText.trim()) return;
+            
+            // 显示加载状态
+            searchButton.disabled = true;
+            searchButton.textContent = '搜索中...';
+            resultsContainer.innerHTML = `
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>正在搜索相关图片，请稍候...</p>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch('/search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: searchText,
+                        topk: 12
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayResults(data.results);
+                    resultsCount.textContent = `找到 ${data.count} 个相关结果`;
+                } else {
+                    showError(data.error || '搜索失败');
+                    resultsCount.textContent = '搜索失败';
+                }
+                
+            } catch (error) {
+                showError('网络错误: ' + error.message);
+                resultsCount.textContent = '搜索失败';
+            } finally {
+                searchButton.disabled = false;
+                searchButton.textContent = '搜索图片';
+            }
+        }
+        
+        function displayResults(results) {
+            const resultsContainer = document.getElementById('resultsContainer');
+            
+            if (results.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div>🔍</div>
+                        <h3>未找到相关图片</h3>
+                        <p>请尝试使用不同的关键词或更详细的描述</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const resultsHTML = `
+                <div class="results-grid">
+                    ${results.map(result => `
+                        <div class="image-card" onclick="showImageModal('${result.image_data}', '${result.image_id}', ${result.score})">
+                            <div class="image-container">
+                                <img src="${result.image_data}" alt="${result.image_id}" loading="lazy">
+                            </div>
+                            <div class="image-info">
+                                <div class="image-id">ID: ${result.image_id}</div>
+                                <div class="image-score">相似度: ${(result.score * 100).toFixed(1)}%</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            resultsContainer.innerHTML = resultsHTML;
+        }
+        
+        function showError(message) {
+            const resultsContainer = document.getElementById('resultsContainer');
+            resultsContainer.innerHTML = `
+                <div class="error">
+                    <strong>错误:</strong> ${message}
+                </div>
+            `;
+        }
+        
+        // 大图预览功能
+        function showImageModal(imageData, imageId, score) {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            const modalDetails = document.getElementById('modalDetails');
+            
+            modal.style.display = "block";
+            modalImg.src = imageData;
+            modalDetails.innerHTML = `ID: ${imageId} | 相似度: ${(score * 100).toFixed(1)}%`;
+        }
+        
+        function closeModal() {
+            document.getElementById('imageModal').style.display = "none";
+        }
+        
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const modal = document.getElementById('imageModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+        
+        // 支持按回车键搜索
+        document.getElementById('searchText').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchImages(e);
+            }
+        });
+    </script>
+</body>
+</html>
