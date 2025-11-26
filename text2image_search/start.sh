@@ -5,8 +5,8 @@
 # export PYTHONPATH=/data/jinhaohuang/Chinese-CLIP:$PYTHONPATH
 
 python app.py \
-    --model_path /data/jinhaohuang/Chinese-CLIP/experiments/PA100K_finetune_vit-l-14_roberta-base/checkpoints/epoch7.pt \
-    --image_data /data/jinhaohuang/Chinese-CLIP/text2image_search/recognition_from_video/results/all_detections_base64.tsv \
+    --model_path /data/jinhaohuang/Chinese-CLIP/experiments/car-V0.1-people_V1.1_finetune_vit-l-14_roberta-base-small-lr/checkpoints/epoch3.pt \
+    --image_data /data/jinhaohuang/Chinese-CLIP/datasets/car-V0.1/vehicle_train.tsv \
     --host 0.0.0.0 \
     --port 5000 \
     --device cuda:0

@@ -51,9 +51,16 @@
         
         .search-form {
             display: flex;
+            flex-direction: column;
             gap: 15px;
             max-width: 800px;
             margin: 0 auto;
+        }
+        
+        .search-row {
+            display: flex;
+            gap: 15px;
+            align-items: center;
         }
         
         .search-input {
@@ -71,6 +78,38 @@
             box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
         }
         
+        .search-options {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .option-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .option-label {
+            font-size: 14px;
+            color: #555;
+            white-space: nowrap;
+        }
+        
+        .option-select, .option-input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+            min-width: 80px;
+        }
+        
+        .option-input {
+            width: 80px;
+        }
+        
         .search-button {
             padding: 15px 30px;
             background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
@@ -81,6 +120,7 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
+            align-self: flex-start;
         }
         
         .search-button:hover {
@@ -284,8 +324,25 @@
                 gap: 15px;
             }
             
-            .search-form {
+            .search-row {
                 flex-direction: column;
+            }
+            
+            .search-options {
+                justify-content: space-between;
+                width: 100%;
+            }
+            
+            .search-button {
+                width: 100%;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .search-options {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
             }
         }
     </style>
@@ -293,17 +350,41 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🔍 智能文搜</h1>
-            <!-- <p>使用中文CLIP模型进行文本到图像的智能搜索</p> -->
+            <h1>🔍 智能文搜图系统</h1>
         </div>
         
         <div class="search-section">
             <form class="search-form" onsubmit="searchImages(event)">
-                <input type="text" class="search-input" id="searchText" 
-                       placeholder="请输入描述文本，例如：穿白色上衣的人。。" required>
-                <button type="submit" class="search-button" id="searchButton">
-                    搜索图片
-                </button>
+                <div class="search-row">
+                    <input type="text" class="search-input" id="searchText" 
+                           placeholder="请输入描述文本，例如：穿白色上衣的人、白色轿车等" required>
+                    <button type="submit" class="search-button" id="searchButton">
+                        搜索图片
+                    </button>
+                </div>
+                <div class="search-options">
+                    <div class="option-group">
+                        <label class="option-label">显示数量:</label>
+                        <select class="option-select" id="topkSelect">
+                            <option value="6">6张</option>
+                            <option value="12" selected>12张</option>
+                            <option value="24">24张</option>
+                            <option value="48">48张</option>
+                        </select>
+                    </div>
+                    <div class="option-group">
+                        <label class="option-label">置信度阈值:</label>
+                        <input type="number" class="option-input" id="confidenceThreshold" 
+                               min="0.0" max="1.0" step="0.05" value="0.0" placeholder="0.0">
+                        <span class="option-label">(0.0-1.0)</span>
+                    </div>
+                    <div class="option-group">
+                        <label class="option-label">阈值说明:</label>
+                        <span class="option-label" style="color: #666; font-size: 12px;">
+                            值越高结果越精确，但数量可能减少
+                        </span>
+                    </div>
+                </div>
             </form>
         </div>
         
@@ -334,11 +415,19 @@
             event.preventDefault();
             
             const searchText = document.getElementById('searchText').value;
+            const topk = document.getElementById('topkSelect').value;
+            const confidenceThreshold = parseFloat(document.getElementById('confidenceThreshold').value);
             const searchButton = document.getElementById('searchButton');
             const resultsContainer = document.getElementById('resultsContainer');
             const resultsCount = document.getElementById('resultsCount');
             
             if (!searchText.trim()) return;
+            
+            // 验证置信度阈值
+            if (isNaN(confidenceThreshold) || confidenceThreshold < 0 || confidenceThreshold > 1) {
+                showError('置信度阈值必须在 0.0 到 1.0 之间');
+                return;
+            }
             
             // 显示加载状态
             searchButton.disabled = true;
@@ -358,15 +447,16 @@
                     },
                     body: JSON.stringify({
                         text: searchText,
-                        topk: 12
+                        topk: parseInt(topk),
+                        confidence_threshold: confidenceThreshold
                     })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    displayResults(data.results);
-                    resultsCount.textContent = `找到 ${data.count} 个相关结果`;
+                    displayResults(data.results, confidenceThreshold);
+                    resultsCount.textContent = `找到 ${data.count} 个相关结果 ${confidenceThreshold > 0 ? `(置信度 ≥ ${confidenceThreshold})` : ''}`;
                 } else {
                     showError(data.error || '搜索失败');
                     resultsCount.textContent = '搜索失败';
@@ -381,15 +471,19 @@
             }
         }
         
-        function displayResults(results) {
+        function displayResults(results, confidenceThreshold) {
             const resultsContainer = document.getElementById('resultsContainer');
             
             if (results.length === 0) {
+                let message = '未找到相关图片';
+                if (confidenceThreshold > 0) {
+                    message += ` (可能因为置信度阈值 ${confidenceThreshold} 设置过高)`;
+                }
                 resultsContainer.innerHTML = `
                     <div class="empty-state">
                         <div>🔍</div>
-                        <h3>未找到相关图片</h3>
-                        <p>请尝试使用不同的关键词或更详细的描述</p>
+                        <h3>${message}</h3>
+                        <p>请尝试使用不同的关键词、降低置信度阈值或使用更详细的描述</p>
                     </div>
                 `;
                 return;
@@ -450,6 +544,20 @@
         document.getElementById('searchText').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 searchImages(e);
+            }
+        });
+        
+        // 置信度阈值输入验证
+        document.getElementById('confidenceThreshold').addEventListener('change', function(e) {
+            let value = parseFloat(this.value);
+            if (isNaN(value)) {
+                this.value = 0.0;
+            } else if (value < 0) {
+                this.value = 0.0;
+            } else if (value > 1) {
+                this.value = 1.0;
+            } else {
+                this.value = Math.round(value * 20) / 20; // 四舍五入到0.05的倍数
             }
         });
     </script>

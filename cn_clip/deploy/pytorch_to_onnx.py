@@ -118,7 +118,11 @@ if __name__ == '__main__':
                     input_names=['text'],
                     output_names=['unnorm_text_features'],
                     export_params=True,
-                    opset_version=13,
+                    opset_version=14,
+                    dynamic_axes={  # 添加动态batch支持
+                        'text': {0: 'batch_size'},
+                        'unnorm_text_features': {0: 'batch_size'}
+                    },
                     verbose=True)
         # convert text FP16 ONNX model based on the FP32 model
         text_fp16_onnx_path = f"{args.save_onnx_path}.txt.fp16.onnx"
@@ -143,7 +147,11 @@ if __name__ == '__main__':
                     output_names=['unnorm_image_features'],
                     export_params=True,
                     do_constant_folding=False,
-                    opset_version=13,
+                    opset_version=14,
+                    dynamic_axes={  # 添加动态batch支持
+                        'image': {0: 'batch_size'},
+                        'unnorm_image_features': {0: 'batch_size'}
+                    },
                     verbose=True)
         # for ViT-H-14 FP32 model, make another conversion to deal with the generated small files
         if args.model_arch == "ViT-H-14":

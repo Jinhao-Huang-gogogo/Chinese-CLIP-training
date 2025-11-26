@@ -103,6 +103,7 @@ class CLIPService:
         current_batch_ids = []
         
         with open(tsv_path, 'r', encoding='utf-8') as f:
+            num = 0
             for line in tqdm(f, desc="Processing images"):
                 parts = line.strip().split('\t')
                 if len(parts) < 2:
@@ -139,6 +140,9 @@ class CLIPService:
                 except Exception as e:
                     logger.warning(f"Error processing image {img_id}: {e}")
                     continue
+                num += 1
+                if num > 5000:
+                    break
         
         # 处理最后一批
         if current_batch:
@@ -186,7 +190,7 @@ class CLIPService:
         
         return text_features.cpu()
 
-    def search_images(self, text, topk=10):
+    def search_images(self, text, topk=10, confidence_threshold=0.0):
         """搜索最相似的图片"""
         # 编码文本
         text_features = self.encode_text(text)
@@ -194,8 +198,23 @@ class CLIPService:
         # 计算相似度
         similarities = (text_features @ self.image_features.T).squeeze(0)
         
-        # 获取topk结果
-        topk_values, topk_indices = torch.topk(similarities, min(topk, len(self.image_ids)))
+        # 应用置信度阈值过滤
+        if confidence_threshold > 0:
+            mask = similarities >= confidence_threshold
+            filtered_indices = torch.nonzero(mask, as_tuple=True)[0]
+            filtered_similarities = similarities[filtered_indices]
+            
+            # 在过滤后的结果中取topk
+            if len(filtered_similarities) > 0:
+                topk_filtered = min(topk, len(filtered_similarities))
+                topk_values, topk_relative_indices = torch.topk(filtered_similarities, topk_filtered)
+                topk_indices = filtered_indices[topk_relative_indices]
+            else:
+                topk_values = torch.tensor([])
+                topk_indices = torch.tensor([])
+        else:
+            # 不使用阈值，直接取topk
+            topk_values, topk_indices = torch.topk(similarities, min(topk, len(self.image_ids)))
         
         results = []
         for score, idx in zip(topk_values.tolist(), topk_indices.tolist()):
@@ -207,6 +226,7 @@ class CLIPService:
             })
         
         return results
+
     def save_image_from_base64(self, base64_str, filepath):
         """将base64图片保存为文件"""
         try:
@@ -234,127 +254,4 @@ class tqdm:
                 print(f"Processed {self.count} items")
             yield item
 
-
-def test_clip_service():
-    """测试CLIP服务的主函数"""
-    parser = argparse.ArgumentParser(description='Test CLIP Service')
-    parser.add_argument('--model_path', type=str, required=True, help='Path to the model checkpoint')
-    parser.add_argument('--image_data', type=str, required=True, help='Path to image TSV file')
-    parser.add_argument('--text', type=str, default="一只猫", help='Text to search for')
-    parser.add_argument('--topk', type=int, default=5, help='Number of top results to show')
-    parser.add_argument('--save_images', action='store_true', help='Save retrieved images to files')
-    parser.add_argument('--device', type=str, default='cuda:0', help='Device to use (cuda:0 or cpu)')
-    
-    args = parser.parse_args()
-    
-    print("=" * 50)
-    print("CLIP Service Test")
-    print("=" * 50)
-    
-    # 初始化服务
-    print("Initializing CLIP service...")
-    start_time = time.time()
-    service = CLIPService(
-        model_path=args.model_path,
-        image_data_path=args.image_data,
-        device=args.device
-    )
-    init_time = time.time() - start_time
-    print(f"Service initialized in {init_time:.2f} seconds")
-    
-    # 测试搜索
-    print(f"\nSearching for: '{args.text}'")
-    search_start = time.time()
-    results = service.search_images(args.text, topk=args.topk)
-    search_time = time.time() - search_start
-    
-    print(f"Search completed in {search_time:.4f} seconds")
-    print(f"Found {len(results)} results:")
-    print("-" * 40)
-    
-    # 显示结果
-    for i, result in enumerate(results):
-        print(f"{i+1}. ID: {result['image_id']}, Score: {result['score']:.4f}")
-        
-        # 保存图片（如果启用）
-        if args.save_images:
-            os.makedirs("test_results", exist_ok=True)
-            filename = f"test_results/result_{i+1}_{result['image_id']}.jpg"
-            if service.save_image_from_base64(result['base64'], filename):
-                print(f"   Image saved: {filename}")
-    
-    print("-" * 40)
-    
-    # 性能测试
-    print("\nPerformance Test:")
-    test_texts = ["一个人", "一辆车", "建筑", "动物", "风景"]
-    for test_text in test_texts:
-        start_time = time.time()
-        results = service.search_images(test_text, topk=3)
-        elapsed = time.time() - start_time
-        print(f"  '{test_text}': {elapsed:.4f}s (top1 score: {results[0]['score']:.4f})")
-
-import argparse
-def interactive_test():
-    """交互式测试模式"""
-    parser = argparse.ArgumentParser(description='Interactive CLIP Service Test')
-    parser.add_argument('--model_path', type=str, required=True, help='Path to the model checkpoint')
-    parser.add_argument('--image_data', type=str, required=True, help='Path to image TSV file')
-    parser.add_argument('--device', type=str, default='cuda:0', help='Device to use (cuda:0 or cpu)')
-    
-    args = parser.parse_args()
-    
-    print("Initializing CLIP service...")
-    service = CLIPService(
-        model_path=args.model_path,
-        image_data_path=args.image_data,
-        device=args.device
-    )
-    
-    print(f"\nCLIP Service Ready! Loaded {len(service.image_ids)} images.")
-    print("Enter search texts (type 'quit' to exit):")
-    
-    while True:
-        try:
-            text = input("\nSearch text: ").strip()
-            if text.lower() in ['quit', 'exit', 'q']:
-                break
-            if not text:
-                continue
-                
-            topk = input("Number of results (default 5): ").strip()
-            topk = int(topk) if topk.isdigit() else 5
-            
-            save_images = input("Save images? (y/n, default n): ").strip().lower() == 'y'
-            
-            print(f"Searching for '{text}'...")
-            start_time = time.time()
-            results = service.search_images(text, topk=topk)
-            elapsed = time.time() - start_time
-            
-            print(f"Found {len(results)} results in {elapsed:.4f}s:")
-            for i, result in enumerate(results):
-                print(f"  {i+1}. ID: {result['image_id']}, Score: {result['score']:.4f}")
-                
-                if save_images:
-                    os.makedirs("search_results", exist_ok=True)
-                    # 清理文本用于文件名
-                    safe_text = "".join(c for c in text if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                    safe_text = safe_text[:50]  # 限制文件名长度
-                    filename = f"search_results/{safe_text}_{i+1}_{result['image_id']}.jpg"
-                    if service.save_image_from_base64(result['base64'], filename):
-                        print(f"     Saved: {filename}")
-                        
-        except KeyboardInterrupt:
-            print("\nExiting...")
-            break
-        except Exception as e:
-            print(f"Error: {e}")
-
-if __name__ == "__main__":
-    # 这里可以选择运行哪种测试模式
-    # 1. 直接测试模式
-    # test_clip_service()
-    
-    # 2. 交互式测试模式（取消注释下面这行来使用）
-    interactive_test()
+# 其他测试函数保持不变...

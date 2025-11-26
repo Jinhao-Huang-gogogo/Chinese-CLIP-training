@@ -19,12 +19,13 @@ def search():
         data = request.get_json()
         text = data.get('text', '').strip()
         topk = int(data.get('topk', 10))
+        confidence_threshold = float(data.get('confidence_threshold', 0.0))
         
         if not text:
             return jsonify({'error': '请输入搜索文本'}), 400
         
         # 执行搜索
-        results = clip_service.search_images(text, topk=topk)
+        results = clip_service.search_images(text, topk=topk, confidence_threshold=confidence_threshold)
         
         # 准备返回数据
         response_data = []
